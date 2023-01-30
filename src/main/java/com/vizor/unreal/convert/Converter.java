@@ -21,6 +21,9 @@ import com.vizor.unreal.config.Config;
 import com.vizor.unreal.config.DestinationConfig;
 import com.vizor.unreal.preprocess.NestedTypesRemover;
 import com.vizor.unreal.preprocess.Preprocessor;
+import com.vizor.unreal.provider.ProtoTypesProvider;
+import com.vizor.unreal.provider.TypesProvider;
+import com.vizor.unreal.provider.UnrealTypesProvider;
 import com.vizor.unreal.util.Tuple;
 import org.apache.logging.log4j.Logger;
 
@@ -53,6 +56,10 @@ public class Converter
 
     private final String moduleName;
 
+    private final TypesProvider ueProvider = new UnrealTypesProvider();
+    private final TypesProvider protoProvider = new ProtoTypesProvider();
+
+
     public Converter(final String moduleName)
     {
         this.moduleName = moduleName;
@@ -73,11 +80,13 @@ public class Converter
             try 
             {
                 fileContent = join(lineSeparator(), readAllLines(pathPair.first()));
+                fileContent = fileContent.trim().replace("\uFEFF", "");
             }
             catch (IOException ex)
             {
                 throw new RuntimeException(ex);
             }
+
 
             final List<ProtoProcessorArgs> protoArgs = preProcess(parse(get(pathToProto.toString()), fileContent))
                 .stream()
@@ -99,10 +108,25 @@ public class Converter
             argsStream = argsStream.parallel();
         }
 
-        argsStream.forEach(arg -> {
-            log.info("Converting {}", arg.pathToProto);
-            new ProtoProcessor(arg, args).run();
-        });
+        final  List<ProtoProcessor> processors = new ArrayList<>();
+        for(ProtoProcessorArgs processorArgs : args)
+        {
+            processors.add(new ProtoProcessor(ueProvider,protoProvider, processorArgs, args));
+        }
+
+        for(ProtoProcessor processor : processors)
+        {
+            log.info("Prerun {}", processor.args.pathToProto);
+            processor.preRun();
+        }
+
+        for(ProtoProcessor processor : processors)
+        {
+            log.info("Converting {}", processor.args.pathToProto);
+            processor.run();
+        }
+
+
     }
 
     private List<ProtoFileElement> preProcess(ProtoFileElement element)

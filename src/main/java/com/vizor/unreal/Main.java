@@ -25,6 +25,7 @@ import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.Logger;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 import static com.vizor.unreal.util.Misc.findFilesRecursively;
@@ -116,6 +117,41 @@ public class Main
         final long start = nanoTime();
 
         final List<Tuple<Path, DestinationConfig>> paths = findFilesRecursively(srcPath, dstPath, "proto");
+        final List<Tuple<Path, DestinationConfig>> google =  new ArrayList<>();
+        final List<Tuple<Path, DestinationConfig>> shared =  new ArrayList<>();
+        int indexGoogleTypes = 0;
+
+
+
+        for(Tuple<Path, DestinationConfig> entry : paths)
+        {
+            if(entry.first().toString().contains("Shared") || entry.first().toString().contains("shared"))
+            {
+                shared.add(entry);
+            }
+
+            if(entry.first().toString().contains("Google") || entry.first().toString().contains("google"))
+            {
+                google.add(entry);
+            }
+
+        }
+
+        for(Tuple<Path, DestinationConfig> entry : shared) {
+            paths.remove(entry);
+        }
+
+        for(Tuple<Path, DestinationConfig> entry : google) {
+            paths.remove(entry);
+        }
+
+        for(Tuple<Path, DestinationConfig> entry : google) {
+            paths.add(0, entry);
+        }
+
+        for(Tuple<Path, DestinationConfig> entry : shared) {
+            paths.add(google.size(), entry);
+        }
 
         // Display how many proto file(s) pending processed
         log.info("Running converter, {} proto-files pending processed.", paths.size());

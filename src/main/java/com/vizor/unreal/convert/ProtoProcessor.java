@@ -109,10 +109,10 @@ class ProtoProcessor implements Runnable
 {
     private static final Logger log = getLogger(ProtoProcessor.class);
 
-    private final ProtoProcessorArgs args;
+    public final ProtoProcessorArgs args;
 
-    private final TypesProvider ueProvider = new UnrealTypesProvider();
-    private final TypesProvider protoProvider = new ProtoTypesProvider();
+    private final TypesProvider ueProvider ;
+    private final TypesProvider protoProvider;
 
     private final List<ProtoProcessorArgs> otherProcessorArgs;
 
@@ -120,11 +120,24 @@ class ProtoProcessor implements Runnable
     // force part separator to be forward slash
     private static final String pathSeparator = "/";
 
-    ProtoProcessor(ProtoProcessorArgs args, List<ProtoProcessorArgs> otherProcessorArgs) {
+    ProtoProcessor(TypesProvider ueProvider, TypesProvider protoProvider, ProtoProcessorArgs args, List<ProtoProcessorArgs> otherProcessorArgs) {
         this.args = args;
         this.otherProcessorArgs = otherProcessorArgs;
+        this.ueProvider = ueProvider;
+        this.protoProvider = protoProvider;
     }
-    
+
+    private Stream<ProtoProcessorArgs> GatherAllImportedProtos(final ProtoProcessorArgs proto, final List<ProtoProcessorArgs> otherProtos)
+    {
+        final Stream<ProtoProcessorArgs> imports = otherProtos.stream()
+                .filter(otherProto -> proto.parse.imports().stream().map(importPathString -> get(importPathString)).anyMatch(importPath -> importPath.equals(otherProto.pathToProto)));
+
+        final Stream<ProtoProcessorArgs> publicImports = otherProtos.stream()
+                .filter(otherProto -> proto.parse.publicImports().stream().map(importPathString -> get(importPathString)).anyMatch(importPath -> importPath.equals(otherProto.pathToProto)));
+
+        return  Stream.concat(imports, publicImports);
+    }
+
     private Stream<ProtoProcessorArgs> GatherImportedProtos(final ProtoProcessorArgs proto, final List<ProtoProcessorArgs> otherProtos)
     {
         return otherProtos.stream()
@@ -148,7 +161,16 @@ class ProtoProcessor implements Runnable
             importedProto -> importedProto.parse.types().forEach(
                 typeElement ->
                 {
-                    final String fullTypeName = importedProto.parse.packageName() + "." + typeElement.name();
+                    String fullTypeName;
+                    final String packageName =  importedProto.parse.packageName();
+                    if(packageName != null && packageName.length() > 0)
+                    {
+                        fullTypeName =                     importedProto.parse.packageName() + "." + typeElement.name();
+                    }
+                    else
+                    {
+                        fullTypeName =                      typeElement.name();
+                    }
 
                     ueProvider.register(fullTypeName, ueNamedType(importedProto.className, typeElement));
                     protoProvider.register(fullTypeName, cppNamedType(importedProto.packageNamespace, typeElement));
@@ -157,13 +179,17 @@ class ProtoProcessor implements Runnable
         );
     }
 
+    public void preRun()
+    {
+        GatherTypes(args, otherProcessorArgs, ueProvider, protoProvider);
+    }
+
     @Override
     public void run()
     {
         final List<ServiceElement> services = args.parse.services();
 
-        GatherTypes(args, otherProcessorArgs, ueProvider, protoProvider);
-        
+
 
         final List<Tuple<CppStruct, CppStruct>> castAssociations = new ArrayList<>();
         final List<CppStruct> unrealStructures = new ArrayList<>();
@@ -251,7 +277,15 @@ class ProtoProcessor implements Runnable
             headerIncludes.add(new CppInclude(Header, "Misc/TVariant.h"));
         }
 
-        final List<String> importedProtoNames = GatherImportedProtos(args, otherProcessorArgs).map(
+        if(isHaveTimespan(unrealStructures))
+        {
+            headerIncludes.add(new CppInclude(Header, "include/google/protobuf/timestamp/Timestamp.h"));
+        }
+
+        final boolean isGameFraction = args.pathToProto.toString().contains("MatchMakingQueue");
+
+
+        final List<String> importedProtoNames = GatherAllImportedProtos(args, otherProcessorArgs).map(
             importedProto -> {
                 return getHeaderPath(importedProto);
             }
@@ -288,8 +322,8 @@ class ProtoProcessor implements Runnable
             new CppInclude(Cpp, "grpc++/channel.h", true),
             new CppInclude(Cpp, "ChannelProvider.h", false),
 
-            new CppInclude(Cpp, generatedIncludeName + ".pb.hpp", false),
-            new CppInclude(Cpp, generatedIncludeName + ".grpc.pb.hpp", false),
+            new CppInclude(Cpp, generatedIncludeName + ".pb.h", false),
+            new CppInclude(Cpp, generatedIncludeName + ".grpc.pb.h", false),
 
             new CppInclude(Cpp, "GrpcIncludesEnd.h"),
             new CppInclude(Cpp, castIncludeName)
@@ -511,6 +545,21 @@ class ProtoProcessor implements Runnable
             for(CppField unreadField : unrealStructure.getFields())
             {
                 if(unreadField.getType().isVariant())
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean isHaveTimespan(List<CppStruct> unrealStructures)
+    {
+        for (CppStruct unrealStructure : unrealStructures)
+        {
+            for(CppField unreadField : unrealStructure.getFields())
+            {
+                if(unreadField.getType().getName().contains("Timestamp"))
                 {
                     return true;
                 }

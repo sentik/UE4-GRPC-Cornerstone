@@ -37,8 +37,8 @@ public abstract class TypesProvider
 {
     private static final Pattern typePattern = compile("^([A-Za-z][A-Za-z0-9_.]+)(<(.+)>)?$");
 
-    private final Map<String, CppType> types = new HashMap<>();
-    private final Map<String, CppType> compiledGenerics = new HashMap<>();
+    private final Map<String, CppType> types = new HashMap<>(512);
+    private final Map<String, CppType> compiledGenerics = new HashMap<>(512);
 
     private final CppType arrayType;
 
@@ -128,9 +128,9 @@ public abstract class TypesProvider
     private CppType getPlainType(final String typeName)
     {
         final CppType foundType = getBestType(typeName);
-        if (isNull(foundType))
+        if (isNull(foundType)) {
             throw new RuntimeException("Can't get a corresponding C++ type for " + typeName);
-
+        }
         // If we've got there, an output type must not be a wildcard generic, but compiled generics are allowed.
         if (foundType.isWildcardGeneric())
             throw new RuntimeException(typeName + " was expected to be a compiled types, but it is actually a wildcard generic"

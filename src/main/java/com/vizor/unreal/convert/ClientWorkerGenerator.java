@@ -109,7 +109,13 @@ class ClientWorkerGenerator
             final CppType response = provider.get(rpc.responseType());
             final CppType responseWithStatus = rspWithSts.makeGeneric(response);
 
-            function.setBody(format(rpcMethodBody, request, rpc.requestType(), rpc.responseType(), responseWithStatus.toString(),
+            final String rawRequestType =  rpc.requestType();
+            final String rawResponseType =  rpc.responseType();
+
+            final String targetRequestType =  rawRequestType.replace('.', '_');
+            final String targetResponseType =  rawResponseType.replace('.', '_');
+
+            function.setBody(format(rpcMethodBody, request, targetRequestType, targetResponseType, responseWithStatus.toString(),
                     response, getPackageNamespaceString(), function.getName()));
         }
 
