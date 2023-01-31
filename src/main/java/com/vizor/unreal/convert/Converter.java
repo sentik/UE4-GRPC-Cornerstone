@@ -43,15 +43,14 @@ import static java.util.Arrays.asList;
 import static java.util.stream.Collectors.toList;
 import static org.apache.logging.log4j.LogManager.getLogger;
 
-public class Converter
-{
+public class Converter {
     private static final Logger log = getLogger(Converter.class);
 
     @SuppressWarnings("ArraysAsListWithZeroOrOneArgument")
     private static final List<Class<? extends Preprocessor>> preprocessorClasses = asList(
-        NestedTypesRemover.class
+            NestedTypesRemover.class
 
-        // Add new ones if you want to...
+            // Add new ones if you want to...
     );
 
     private final String moduleName;
@@ -60,99 +59,87 @@ public class Converter
     private final TypesProvider protoProvider = new ProtoTypesProvider();
 
 
-    public Converter(final String moduleName)
-    {
+    public Converter(final String moduleName) {
         this.moduleName = moduleName;
     }
 
-    public void convert(final Path srcPath, final List<Tuple<Path, DestinationConfig>> paths)
-    {
+    public void convert(final Path srcPath, final List<Tuple<Path, DestinationConfig>> paths) {
         List<ProtoProcessorArgs> args = new ArrayList<>();
 
         Stream<Tuple<Path, DestinationConfig>> pathsStream = paths.stream();
 
         pathsStream.forEach(pathPair -> {
             final Path pathToProto = pathPair.first();
+            final String pathToProtoStr = pathToProto.toString();
             final DestinationConfig pathToConverted = pathPair.second();
-            
+
             String fileContent = null;
-            
-            try 
-            {
+
+            try {
                 fileContent = join(lineSeparator(), readAllLines(pathPair.first()));
                 fileContent = fileContent.trim().replace("\uFEFF", "");
-            }
-            catch (IOException ex)
-            {
+            } catch (IOException ex) {
                 throw new RuntimeException(ex);
             }
 
 
-            final List<ProtoProcessorArgs> protoArgs = preProcess(parse(get(pathToProto.toString()), fileContent))
-                .stream()
-                .map(
-                    protoFile -> 
-                    {
-                        final Path relativePath = srcPath.relativize(pathToProto); 
-                        return new ProtoProcessorArgs(protoFile, relativePath, pathToConverted, moduleName);
-                    })
-                .collect(Collectors.toList());
+            final List<ProtoProcessorArgs> protoArgs = preProcess(parse(get(pathToProtoStr), fileContent))
+                    .stream()
+                    .map(
+                            protoFile ->
+                            {
+                                final Path relativePath = srcPath.relativize(pathToProto);
+                                return new ProtoProcessorArgs(protoFile, relativePath, pathToConverted, moduleName);
+                            })
+                    .collect(Collectors.toList());
 
             args.addAll(protoArgs);
         });
 
-        Stream<ProtoProcessorArgs> argsStream = args.stream();
-
-        if (!Config.get().isNoFork())
-        {
-            argsStream = argsStream.parallel();
+        final List<ProtoProcessor> processors = new ArrayList<>();
+        for (ProtoProcessorArgs processorArgs : args) {
+            processors.add(new ProtoProcessor(ueProvider, protoProvider, processorArgs, args));
         }
 
-        final  List<ProtoProcessor> processors = new ArrayList<>();
-        for(ProtoProcessorArgs processorArgs : args)
-        {
-            processors.add(new ProtoProcessor(ueProvider,protoProvider, processorArgs, args));
-        }
-
-        for(ProtoProcessor processor : processors)
-        {
-            log.info("Prerun {}", processor.args.pathToProto);
+        for (ProtoProcessor processor : processors) {
+            log.info("PreRun {}", processor.args.pathToProto);
             processor.preRun();
         }
 
-        for(ProtoProcessor processor : processors)
-        {
-            log.info("Converting {}", processor.args.pathToProto);
-            processor.run();
+        for (ProtoProcessor processor : processors) {
+            final String pathToProtoStr = processor.args.pathToProto.toString();
+            if (pathToProtoStr.contains("google")) {
+                log.info("Skip {}", pathToProtoStr);
+                continue;
+            }
+            else {
+                log.info("Converting {}", processor.args.pathToProto);
+                processor.run();
+            }
         }
 
 
     }
 
-    private List<ProtoFileElement> preProcess(ProtoFileElement element)
-    {
+    private List<ProtoFileElement> preProcess(ProtoFileElement element) {
         final List<ProtoFileElement> elements = new ArrayList<>();
         elements.add(element);
 
-        try
-        {
-            for (final Class<? extends Preprocessor> c : preprocessorClasses)
-            {
+        try {
+            for (final Class<? extends Preprocessor> c : preprocessorClasses) {
                 final Preprocessor p = c.cast(c.newInstance());
 
                 // note that each processor outputs a set of ProtoFileElements's
                 // which should be processed independent of each other.
                 final List<ProtoFileElement> processed = elements.stream()
-                    .peek(e -> log.debug("Processing '{}' with '{}'", e.packageName(), p.getClass().getSimpleName()))
-                    .map(p::process)
-                    .collect(toList());
+                        .peek(e -> log.debug("Processing '{}' with '{}'", e.packageName(), p.getClass().getSimpleName()))
+                        .map(p::process)
+                        .collect(toList());
 
                 elements.clear();
                 elements.addAll(processed);
             }
-        }
-        catch (Throwable e)
-        {
+        } catch (Throwable e) {
             throw new RuntimeException(e);
         }
 

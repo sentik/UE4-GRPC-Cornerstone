@@ -147,10 +147,10 @@ public abstract class TypesProvider
     final void register(final String protoType, final CppType cppType, final Class<?> nativeType)
     {
         final CppType previous = types.put(protoType, cppType);
-        if (nonNull(previous))
+        if (nonNull(previous)) {
             throw new RuntimeException("Type association '" + protoType + "' -> '" + previous.getName() +
                     "' is already defined");
-
+        }
         if (nonNull(nativeType))
             cppType.markAsNative(nativeType);
     }

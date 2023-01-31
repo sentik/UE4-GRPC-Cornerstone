@@ -15,6 +15,7 @@
  */
 package com.vizor.unreal.convert;
 
+import com.google.common.collect.ImmutableList;
 import com.squareup.wire.schema.internal.parser.EnumConstantElement;
 import com.squareup.wire.schema.internal.parser.EnumElement;
 import com.squareup.wire.schema.internal.parser.FieldElement;
@@ -157,26 +158,26 @@ class ProtoProcessor implements Runnable
     {
         final Stream<ProtoProcessorArgs> importedProtos = GatherImportedProtosDeep(proto, otherProtos);
 
-        importedProtos.forEach(
-            importedProto -> importedProto.parse.types().forEach(
-                typeElement ->
+        //importedProtos.forEach(
+        final ImmutableList<TypeElement> types = proto.parse.types();
+        types.forEach(typeElement ->
                 {
                     String fullTypeName;
-                    final String packageName =  importedProto.parse.packageName();
+                    final String packageName =  proto.parse.packageName();
                     if(packageName != null && packageName.length() > 0)
                     {
-                        fullTypeName =                     importedProto.parse.packageName() + "." + typeElement.name();
+                        fullTypeName =                     proto.parse.packageName() + "." + typeElement.name();
                     }
                     else
                     {
                         fullTypeName =                      typeElement.name();
                     }
 
-                    ueProvider.register(fullTypeName, ueNamedType(importedProto.className, typeElement));
-                    protoProvider.register(fullTypeName, cppNamedType(importedProto.packageNamespace, typeElement));
+                    ueProvider.register(fullTypeName, ueNamedType(proto.className, typeElement));
+                    protoProvider.register(fullTypeName, cppNamedType(proto.packageNamespace, typeElement));
                 }
-            )
-        );
+            );
+        //);
     }
 
     public void preRun()
@@ -279,7 +280,7 @@ class ProtoProcessor implements Runnable
 
         if(isHaveTimespan(unrealStructures))
         {
-            headerIncludes.add(new CppInclude(Header, "include/google/protobuf/timestamp/Timestamp.h"));
+            headerIncludes.add(new CppInclude(Header, "google/protobuf/timestamp/Timestamp.h"));
         }
 
         final boolean isGameFraction = args.pathToProto.toString().contains("MatchMakingQueue");

@@ -121,8 +121,6 @@ public class Main
         final List<Tuple<Path, DestinationConfig>> shared =  new ArrayList<>();
         int indexGoogleTypes = 0;
 
-
-
         for(Tuple<Path, DestinationConfig> entry : paths)
         {
             if(entry.first().toString().contains("Shared") || entry.first().toString().contains("shared"))
@@ -135,22 +133,6 @@ public class Main
                 google.add(entry);
             }
 
-        }
-
-        for(Tuple<Path, DestinationConfig> entry : shared) {
-            paths.remove(entry);
-        }
-
-        for(Tuple<Path, DestinationConfig> entry : google) {
-            paths.remove(entry);
-        }
-
-        for(Tuple<Path, DestinationConfig> entry : google) {
-            paths.add(0, entry);
-        }
-
-        for(Tuple<Path, DestinationConfig> entry : shared) {
-            paths.add(google.size(), entry);
         }
 
         // Display how many proto file(s) pending processed

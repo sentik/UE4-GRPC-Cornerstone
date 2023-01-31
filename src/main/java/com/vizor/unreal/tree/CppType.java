@@ -447,13 +447,15 @@ public class CppType implements CtLeaf
     @Override
     public final String toString()
     {
-        final StringBuilder sb = new StringBuilder();
+        final StringBuilder sb = new StringBuilder(128);
+
+        final boolean hasNS = namespaces.contains("google.protobuf");
 
         for (CppNamespace namespace : namespaces)
         {
             final String namespaceName = (namespace != null) ? namespace.getName() : null;
             if (namespaceName != null)
-                sb.append(namespaceName).append("::");
+                sb.append(namespaceName.replace(".", "::")).append("::");
         }
 
 
