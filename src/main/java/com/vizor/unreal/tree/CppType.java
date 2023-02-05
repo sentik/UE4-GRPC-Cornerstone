@@ -39,36 +39,30 @@ import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.joining;
 
 @SuppressWarnings("unused")
-public class CppType implements CtLeaf
-{
+public class CppType implements CtLeaf {
     private static final CppType wildcard = plain("?", Wildcard);
 
-    public enum Passage
-    {
+    public enum Passage {
         ByValue(""),
         ByRef("&"),
         ByPtr("*");
 
         private final String symbols;
 
-        Passage(String symbols)
-        {
+        Passage(String symbols) {
             this.symbols = symbols;
         }
 
-        public final boolean isDefault()
-        {
+        public final boolean isDefault() {
             return (this == ByValue);
         }
 
-        public final String getSymbols()
-        {
+        public final String getSymbols() {
             return symbols;
         }
     }
 
-    public enum Kind
-    {
+    public enum Kind {
         Primitive,
         Struct,
         Class,
@@ -81,12 +75,11 @@ public class CppType implements CtLeaf
          * Enum -> 'enum';
          * Struct -> 'struct';
          * Primitive -> '' because primitives has no kind.
+         *
          * @return Name of the C++ kind for given instance.
          */
-        public final String getCppKindName()
-        {
-            switch (this)
-            {
+        public final String getCppKindName() {
+            switch (this) {
                 case Class:
                 case Struct:
                 case Enum:
@@ -117,26 +110,25 @@ public class CppType implements CtLeaf
 
     private Class<?> nativeClass = null;
 
-    /** The hash code is being cached, because it is kinda hard to calculate **/
+    /**
+     * The hash code is being cached, because it is kinda hard to calculate
+     **/
     private int hash;
 
-    private CppType(String name, Kind kind)
-    {
+    private CppType(String name, Kind kind) {
         this(name, kind, emptyList());
     }
 
-    private CppType(String name, Kind kind, Collection<CppType> genericParams)
-    {
+    private CppType(String name, Kind kind, Collection<CppType> genericParams) {
         this(name, kind, genericParams, null, Passage.ByValue, false, false);
     }
 
     private CppType(String name, Kind kind, Collection<CppType> genericParams, CppType underType, Passage passage,
-                    boolean isConstant, boolean isVolatile)
-    {
+                    boolean isConstant, boolean isVolatile) {
         stream(Passage.values()).forEach(p -> {
             if (name.endsWith(p.name()))
                 throw new RuntimeException("Incorrect type name, you should use 'make" + p.name() +
-                    "()' to make a pointer/reference type instead");
+                        "()' to make a pointer/reference type instead");
         });
 
         this.name = name;
@@ -151,87 +143,74 @@ public class CppType implements CtLeaf
         this.isVolatile = isVolatile;
     }
 
-    public final boolean isArray()
-    {
+    public final boolean isArray() {
         return hasNativeType() && nativeClass.isArray();
     }
 
-    public final boolean isMap()
-    {
+    public final boolean isMap() {
         return hasNativeType() && nativeClass.isAssignableFrom(Map.class);
     }
 
-    public final boolean isKindOf(final Kind kind)
-    {
+    public final boolean isKindOf(final Kind kind) {
         return this.kind == kind;
     }
 
-    public final boolean isWildcard()
-    {
+    public final boolean isWildcard() {
         return this == wildcard;
     }
 
-    public final boolean isGeneric()
-    {
+    public final boolean isGeneric() {
         return !genericParams.isEmpty();
     }
 
-    public final boolean isVariant() { return !variantParams.isEmpty(); }
+    public final boolean isVariant() {
+        return !variantParams.isEmpty();
+    }
 
-    public final boolean isCompiledGeneric()
-    {
+    public final boolean isCompiledGeneric() {
         return isGeneric() && genericParams.stream().noneMatch(CppType::isWildcard);
     }
 
-    public final boolean isWildcardGeneric()
-    {
+    public final boolean isWildcardGeneric() {
         return isGeneric() && genericParams.stream().filter(CppType::isWildcard).count() == genericParams.size();
     }
 
-    public final boolean hasNativeType()
-    {
+    public final boolean hasNativeType() {
         return nonNull(nativeClass);
     }
 
-    public final boolean isA(final Class<?> clazz)
-    {
+    public final boolean isA(final Class<?> clazz) {
         return hasNativeType() && nativeClass.isAssignableFrom(clazz);
     }
 
-    public final boolean isConstant()
-    {
+    public final boolean isConstant() {
         return isConstant;
     }
 
-    public final boolean isVolatile()
-    {
+    public final boolean isVolatile() {
         return isVolatile;
     }
 
-    public final void markAsNative(final Class<?> nativeClass)
-    {
+    public final void markAsNative(final Class<?> nativeClass) {
         if (isNull(nativeClass))
             throw new RuntimeException("Native class should not be null");
 
         if (nonNull(this.nativeClass) && !Objects.equals(this.nativeClass, nativeClass))
             throw new RuntimeException("Can not mark " + toString() + " as native " + nativeClass.getSimpleName() +
-                ", because it was already marked as " + this.nativeClass.getSimpleName());
+                    ", because it was already marked as " + this.nativeClass.getSimpleName());
 
         this.nativeClass = nativeClass;
     }
 
-    public final void markAsNativeArray()
-    {
+    public final void markAsNativeArray() {
         markAsNative(Object[].class);
     }
 
-    public String getName()
-    {
+    public String getName() {
         return name;
     }
 
-    public List<CppType> getGenericParams()
-    {
+    public List<CppType> getGenericParams() {
         // fast way for non-generic types
         if (genericParams.isEmpty())
             return emptyList();
@@ -251,8 +230,7 @@ public class CppType implements CtLeaf
         this.variantName = variantName;
     }
 
-    public Set<CppType> getFlatGenericArguments()
-    {
+    public Set<CppType> getFlatGenericArguments() {
         if (!isGeneric())
             return emptySet();
 
@@ -261,8 +239,7 @@ public class CppType implements CtLeaf
         final List<CppType> upperLevel = new ArrayList<>(genericParams);
         final List<CppType> currentLevel = new ArrayList<>();
 
-        while (!upperLevel.isEmpty())
-        {
+        while (!upperLevel.isEmpty()) {
             flatTypes.addAll(upperLevel);
 
             upperLevel.forEach(t -> currentLevel.addAll(t.genericParams));
@@ -276,8 +253,7 @@ public class CppType implements CtLeaf
         return flatTypes;
     }
 
-    public Set<CppType> getFlatVariantArguments()
-    {
+    public Set<CppType> getFlatVariantArguments() {
         if (!isVariant())
             return emptySet();
 
@@ -286,8 +262,7 @@ public class CppType implements CtLeaf
         final List<CppType> upperLevel = new ArrayList<>(variantParams);
         final List<CppType> currentLevel = new ArrayList<>();
 
-        while (!upperLevel.isEmpty())
-        {
+        while (!upperLevel.isEmpty()) {
             flatTypes.addAll(upperLevel);
 
             upperLevel.forEach(t -> currentLevel.addAll(t.variantParams));
@@ -301,21 +276,18 @@ public class CppType implements CtLeaf
         return flatTypes;
     }
 
-    public final Kind getKind()
-    {
+    public final Kind getKind() {
         return kind;
     }
 
-    public Passage getPassage()
-    {
+    public Passage getPassage() {
         return passage;
     }
 
     private CppType makeHybrid(final List<CppType> genericParams,
                                final Passage passage,
                                final boolean isConstant,
-                               final boolean isVolatile)
-    {
+                               final boolean isVolatile) {
         final CppType cppType = new CppType(name, kind, genericParams, getMostUnderType(), passage, isConstant, isVolatile);
         cppType.setNamespaces(getNamespaces());
 
@@ -326,10 +298,8 @@ public class CppType implements CtLeaf
         return cppType;
     }
 
-    public final CppType makeGeneric(final List<CppType> genericParams)
-    {
-        if (!genericParams.isEmpty())
-        {
+    public final CppType makeGeneric(final List<CppType> genericParams) {
+        if (!genericParams.isEmpty()) {
             if (!isGeneric())
                 throw new RuntimeException(toString() + " is not a generic type");
 
@@ -343,116 +313,95 @@ public class CppType implements CtLeaf
         return makeHybrid(genericParams, passage, isConstant, isVolatile);
     }
 
-    public final CppType makeGeneric(final CppType... genericArguments)
-    {
+    public final CppType makeGeneric(final CppType... genericArguments) {
         return makeGeneric(asList(genericArguments));
     }
 
-    public final CppType makeRef(final boolean isConstant, final boolean isVolatile)
-    {
+    public final CppType makeRef(final boolean isConstant, final boolean isVolatile) {
         return makeHybrid(genericParams, Passage.ByRef, isConstant, isVolatile);
     }
 
-    public final CppType makeRef()
-    {
+    public final CppType makeRef() {
         return makeHybrid(genericParams, Passage.ByRef, isConstant, isVolatile);
     }
 
-    public final CppType makePtr(final boolean isConstant, final boolean isVolatile)
-    {
+    public final CppType makePtr(final boolean isConstant, final boolean isVolatile) {
         return makeHybrid(genericParams, Passage.ByPtr, isConstant, isVolatile);
     }
 
-    public final CppType makePtr()
-    {
+    public final CppType makePtr() {
         return makeHybrid(genericParams, Passage.ByPtr, isConstant, isVolatile);
     }
 
-    public final CppType makeValue(final boolean isConstant, final boolean isVolatile)
-    {
+    public final CppType makeValue(final boolean isConstant, final boolean isVolatile) {
         return makeHybrid(genericParams, Passage.ByValue, isConstant, isVolatile);
     }
 
-    public final CppType makeValue()
-    {
+    public final CppType makeValue() {
         return makeHybrid(genericParams, Passage.ByValue, isConstant, isVolatile);
     }
 
-    public final CppType makeConstant(final Passage passage)
-    {
+    public final CppType makeConstant(final Passage passage) {
         return makeHybrid(genericParams, passage, true, isVolatile);
     }
 
-    public final CppType makeVolatile(final Passage passage)
-    {
+    public final CppType makeVolatile(final Passage passage) {
         return makeHybrid(genericParams, passage, isConstant, true);
     }
 
-    public final CppType makeConstant()
-    {
+    public final CppType makeConstant() {
         return makeHybrid(genericParams, passage, true, isVolatile);
     }
 
-    public final CppType makeVolatile()
-    {
+    public final CppType makeVolatile() {
         return makeHybrid(genericParams, passage, isConstant, true);
     }
 
-    public final CppType getUnderType()
-    {
+    public final CppType getUnderType() {
         return isNull(underType) ? null : getMostUnderType();
     }
 
-    private CppType getMostUnderType()
-    {
+    private CppType getMostUnderType() {
         if (isConstant || isVolatile || !passage.isDefault())
             return requireNonNull(underType, "Hierarchy is broken").getMostUnderType();
 
         return this;
     }
 
-    public final void setNamespaces(final CppNamespace... namespaces)
-    {
+    public final void setNamespaces(final CppNamespace... namespaces) {
         setNamespaces(asList(namespaces));
     }
 
-    public final void setNamespaces(final List<CppNamespace> namespaces)
-    {
+    public final void setNamespaces(final List<CppNamespace> namespaces) {
         this.namespaces.clear();
         this.namespaces.addAll(namespaces);
     }
 
-    public final List<CppNamespace> getNamespaces()
-    {
+    public final List<CppNamespace> getNamespaces() {
         return unmodifiableList(namespaces);
     }
 
-    public static CppType wildcardGeneric(final String name, final Kind kind, final int numParams)
-    {
+    public static CppType wildcardGeneric(final String name, final Kind kind, final int numParams) {
         return new CppType(name, kind, nCopies(numParams, wildcard));
     }
 
-    public static CppType plain(String name, Kind kind)
-    {
+    public static CppType plain(String name, Kind kind) {
         return new CppType(name, kind);
     }
 
     @Override
-    public CppPrinter accept(final CppPrinter printer)
-    {
+    public CppPrinter accept(final CppPrinter printer) {
         printer.visit(this);
         return printer;
     }
 
     @Override
-    public final String toString()
-    {
+    public final String toString() {
         final StringBuilder sb = new StringBuilder(128);
 
         final boolean hasNS = namespaces.contains("google.protobuf");
 
-        for (CppNamespace namespace : namespaces)
-        {
+        for (CppNamespace namespace : namespaces) {
             final String namespaceName = (namespace != null) ? namespace.getName() : null;
             if (namespaceName != null)
                 sb.append(namespaceName.replace(".", "::")).append("::");
@@ -463,15 +412,13 @@ public class CppType implements CtLeaf
 
         if (isGeneric())
             sb.append(genericParams.stream().map(CppType::toString).collect(joining(", ", "<", ">")));
-
-        return sb.toString();
+        final String TypeName = sb.toString();
+        return TypeName;
     }
 
     @Override
-    public final int hashCode()
-    {
-        if (hash == 0)
-        {
+    public final int hashCode() {
+        if (hash == 0) {
             final List<Object> hashes = new ArrayList<>();
 
             hashes.add(isConstant);
@@ -495,16 +442,14 @@ public class CppType implements CtLeaf
     }
 
     @Override
-    public final boolean equals(final Object o)
-    {
+    public final boolean equals(final Object o) {
         if (this == o)
             return true;
 
-        if (o instanceof CppType)
-        {
+        if (o instanceof CppType) {
             final CppType otherType = (CppType) o;
 
-            return  (isConstant == otherType.isConstant) &&
+            return (isConstant == otherType.isConstant) &&
                     (isVolatile == otherType.isVolatile) &&
                     Objects.equals(kind, otherType.kind) &&
                     Objects.equals(name, otherType.name) &&

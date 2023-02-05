@@ -146,8 +146,8 @@ class CastGenerator {
 
         final List<CppType> params = outType.getGenericParams();
         final CastMethod castMethod = getCastMethod(inType);
-        final String outFileName = outField.getName();
-        final boolean hasNS = outFileName.contains("Timestamp");
+        final String outFieldName = outField.getName();
+        final boolean hasNS = outFieldName.contains("Timestamp");
 
         if (inType.isMap()) {
             if (params.size() != 2) {
@@ -156,7 +156,7 @@ class CastGenerator {
             }
 
             final String castPattern = outputItemName + ".{0} = " + castMethod.getMethodName() + "<{1}>(" + inputItemName + ".{2}());";
-            return format(castPattern, outFileName, params.stream().map(CppType::toString).collect(joining(", ")),
+            return format(castPattern, outFieldName, params.stream().map(CppType::toString).collect(joining(", ")),
                     inField.getName());
         } else if (inType.isVariant()) {
             StringBuilder switchBody = new StringBuilder(String.format("switch (%s.%s_case())", inputItemName, inField.getName()));
@@ -165,8 +165,8 @@ class CastGenerator {
             List<CppType> outParams = outField.getType().getVariantParams();
             List<CppType> inParams = inField.getType().getVariantParams();
             for (int i = 0; i < outParams.size(); i++) {
-                switchBody.append(String.format("\tcase %s::%sCase::k%s:", inStructType.toString(), outFileName, capitalise(outParams.get(i).getVariantName()))).append(lineSeparator());
-                switchBody.append(String.format("\t\t%s.%s.Set<%s>(Proto_Cast<%s>(%s.%s()));", outputItemName, outFileName, outParams.get(i).toString(), outParams.get(i).toString(), inputItemName, inParams.get(i).getVariantName())).append(lineSeparator());
+                switchBody.append(String.format("\tcase %s::%sCase::k%s:", inStructType.toString(), outFieldName, capitalise(outParams.get(i).getVariantName()))).append(lineSeparator());
+                switchBody.append(String.format("\t\t%s.%s.Set<%s>(Proto_Cast<%s>(%s.%s()));", outputItemName, outFieldName, outParams.get(i).toString(), outParams.get(i).toString(), inputItemName, inParams.get(i).getVariantName())).append(lineSeparator());
                 switchBody.append("\t\tbreak;").append(lineSeparator());
             }
             switchBody.append('}');
@@ -177,15 +177,15 @@ class CastGenerator {
 
             final String pattern = outputItemName + ".{0} = " + castMethod.getMethodName() + "<{1}>(" + inputItemName + ".{2}());";
 
-            return format(pattern,outFileName, castedTypename, inField.getName());
+            return format(pattern,outFieldName, castedTypename, inField.getName());
         }
     }
 
     private String generateUeToProtoCast(CppField inField, CppField outField, CppType inStructType) {
         final CppType inType = inField.getType();
         final CppType outType = outField.getType();
-        final String outFileName = outField.getName();
-        final boolean hasNS = outType.toString().contains("Timestamp");
+        final String outFieldName = outField.getName();
+        final boolean hasNS =  outFieldName.contains("case");
 
         final List<CppType> params = outType.getGenericParams();
         final String paramsArgs = params.stream().map(CppType::toString).collect(joining(", "));
@@ -199,7 +199,7 @@ class CastGenerator {
                         " type, the number of args should be 2, not: " + params.size());
             }
 
-            final String declarationName = "CastedMap_" + outFileName;
+            final String declarationName = "CastedMap_" + outFieldName;
 
             @SuppressWarnings("StringBufferReplaceableByString") final StringBuilder sb = new StringBuilder();
 
@@ -208,13 +208,13 @@ class CastGenerator {
             sb.append('(').append(inputItemName).append('.').append(inField.getName()).append(");");
             sb.append(lineSeparator());
 
-            sb.append(outputItemName).append(".mutable_").append(outFileName).append("()->insert(");
+            sb.append(outputItemName).append(".mutable_").append(outFieldName).append("()->insert(");
             sb.append(declarationName).append(".begin(), ").append(declarationName).append(".end());");
 
             completeCast = sb.toString();
         } else if (inType.isArray()) {
             final String pattern = outputItemName + ".mutable_{0}()->CopyFrom(" + castMethod.getMethodName() + "<{1}>(" + inputItemName + ".{2}));";
-            completeCast = format(pattern, outFileName, paramsArgs, inField.getName());
+            completeCast = format(pattern, outFieldName, paramsArgs, inField.getName());
         } else if (inType.isVariant()) {
             StringBuilder switchBody = new StringBuilder(String.format("switch (InItem.%s.GetIndex())", inField.getName()));
             switchBody.append(lineSeparator()).append('{').append(lineSeparator());
@@ -238,7 +238,7 @@ class CastGenerator {
                 final StringBuilder sb = new StringBuilder();
 
                 // Create a temporary variable and assign the result to it.
-                final String declarationName = "CastedStruct_" + outField.getName();
+                final String declarationName = "CastedStruct_" + outFieldName;
 
                 sb.append(outType.toString()).append(" ").append(declarationName).append(" = ");
                 sb.append(castMethod.getMethodName()).append('<').append(outType.toString()).append('>');

@@ -173,7 +173,7 @@ class ProtoProcessor implements Runnable
                         fullTypeName =                      typeElement.name();
                     }
 
-                    ueProvider.register(fullTypeName, ueNamedType(proto.className, typeElement));
+                    ueProvider.register(fullTypeName, ueNamedType(proto.className, typeElement, false));
                     protoProvider.register(fullTypeName, cppNamedType(proto.packageNamespace, typeElement));
                 }
             );
@@ -265,13 +265,24 @@ class ProtoProcessor implements Runnable
         @SuppressWarnings("unused")
         final boolean ignorePrivate = dstPath.pathPrivate.toFile().mkdirs();
 
+        final boolean hasServices = args.parse.services().isEmpty() == false;
+
         final List<CppInclude> headerIncludes = new ArrayList<>(asList(
             // header
-            new CppInclude(Header, "CoreMinimal.h"),
-            new CppInclude(Header, "Conduit.h"),
-            new CppInclude(Header, "GenUtils.h"),
-            new CppInclude(Header, "RpcClient.h")
+            //new CppInclude(Header, "CoreTypes.h"),
+            //new CppInclude(Header, "HAL/PlatformCrt.h"),
+            //new CppInclude(Header, "Containers/UnrealString.h"),
+            //new CppInclude(Header, "Containers/Array.h")
         ));
+
+        if(hasServices)
+        {
+            headerIncludes.add(0, new CppInclude(Header, "Windows/MinWindows.h"));
+            headerIncludes.add( new CppInclude(Header, "Conduit.h"));
+            headerIncludes.add( new CppInclude(Header, "RpcClient.h"));
+            headerIncludes.add( new CppInclude(Header, "GenUtils.h"));
+
+        }
 
         if(isHaveVariantField(unrealStructures))
         {
@@ -297,7 +308,7 @@ class ProtoProcessor implements Runnable
         if (clients.size() > 0 || unrealStructures.size() > 0 || ueEnums.size() > 0)
         {
             headerIncludes.add(
-                new CppInclude(Header, args.className + ".generated.h")
+                new CppInclude(Header, args.wrapperName + ".generated.h")
             );
         }
         
@@ -314,34 +325,30 @@ class ProtoProcessor implements Runnable
         // code. mutable to allow
         final List<CppRecord> cppIncludes = new ArrayList<>(asList(
             new CppInclude(Cpp, generatedHeaderPath + ".h"),
-            new CppInclude(Cpp, "RpcClientWorker.h"),
-            new CppInclude(Cpp, "WorkerUtils.h"),
-
-            new CppInclude(Cpp, "GrpcIncludesBegin.h"),
-
-            new CppInclude(Cpp, "grpc/support/log.h", true),
-            new CppInclude(Cpp, "grpc++/channel.h", true),
-            new CppInclude(Cpp, "ChannelProvider.h", false),
-
-            new CppInclude(Cpp, generatedIncludeName + ".pb.h", false),
-            new CppInclude(Cpp, generatedIncludeName + ".grpc.pb.h", false),
-
-            new CppInclude(Cpp, "GrpcIncludesEnd.h"),
             new CppInclude(Cpp, castIncludeName)
         ));
+
+        if(hasServices)
+        {
+            cppIncludes.add(new CppInclude(Cpp, generatedIncludeName + ".grpc.pb.h", false));
+            cppIncludes.add( new CppInclude(Cpp, "ChannelProvider.h"));
+        }
         
-        final List<CppRecord> castsIncludes = new ArrayList<>(asList(
-            new CppInclude(Header, "CastUtils.h"),
+        final List<CppRecord> castsIncludes = new ArrayList<>(16);
+        {
+            //castsIncludes.add(new CppInclude(Header, "GrpcIncludesBegin.h"));
+            castsIncludes.add(new CppInclude(Header, generatedIncludeName + ".pb.h", false));
 
-            new CppInclude(Header, "GrpcIncludesBegin.h"),
+           // castsIncludes.add(new CppInclude(Header, "GrpcIncludesBegin.h"));
+        }
+        if(hasServices) {
+            castsIncludes.add(0, new CppInclude(Header, "GenUtils_Casts.h"));
+        }
+        else {
+            castsIncludes.add(0, new CppInclude(Header, "CastUtils.h"));
+        }
 
-            new CppInclude(Header, generatedIncludeName + ".pb.h", false),
-            new CppInclude(Header, generatedIncludeName + ".grpc.pb.h", false),
-
-            new CppInclude(Header, "GrpcIncludesEnd.h"),
-
-            new CppInclude(Header, generatedHeaderPath + ".h")
-        ));
+        castsIncludes.add(new CppInclude(Header, generatedHeaderPath + ".h"));
 
         castsIncludes.addAll(
             importedProtoNames.stream()
@@ -352,19 +359,25 @@ class ProtoProcessor implements Runnable
         if (!stringIsNullOrEmpty(config.getPrecompiledHeader()))
             cppIncludes.add(0, new CppInclude(Cpp, config.getPrecompiledHeader(), false));
 
-        final DestinationConfig outFilePath = dstPath.append(args.className);
-        final DestinationConfig outCastsFilePath = dstPath.append(args.className + "Casts");
+        final DestinationConfig outFilePath = dstPath.append(args.wrapperName);
+        final DestinationConfig outCastsFilePath = dstPath.append(args.wrapperName + "Casts");
         
-        try (final CppPrinter castsPrinter = new CppPrinter(outCastsFilePath, args.moduleName.toUpperCase(), HeaderType.Private))
+        try (final CppPrinter castsPrinter = new CppPrinter(outCastsFilePath, args.moduleName.toUpperCase(), HeaderType.Private, false))
         {
+            castsPrinter.writeLine("#ifndef " + args.wrapperName.toUpperCase() + "_CAST_HEADERS");
+            castsPrinter.writeLine("#define " + args.wrapperName.toUpperCase() + "_CAST_HEADERS");
+            castsPrinter.newLine();
+
             castsIncludes.forEach(i -> i.accept(castsPrinter));
             castsPrinter.newLine();
-    
+
             // Write casts to the CPP file
             casts.accept(castsPrinter).newLine();
+
+            castsPrinter.writeLine("#endif ");
         }
 
-        try (final CppPrinter p = new CppPrinter(outFilePath, args.moduleName.toUpperCase()))
+        try (final CppPrinter p = new CppPrinter(outFilePath, args.moduleName.toUpperCase(), true))
         {
             headerIncludes.forEach(i -> i.accept(p));
             p.newLine();
@@ -394,6 +407,7 @@ class ProtoProcessor implements Runnable
             workers.forEach(c -> c.accept(p).newLine());
 
             clients.forEach(w -> w.accept(p).newLine());
+
         }
     }
 
@@ -402,7 +416,7 @@ class ProtoProcessor implements Runnable
         // remove extension and fix slashes up
         final String pathToGeneratedHeaderDirectory = removeExtension(args.pathToProto.toString()).replace("\\", pathSeparator);
                 
-        final String generatedHeaderPath = join(pathSeparator, pathToGeneratedHeaderDirectory, args.className);
+        final String generatedHeaderPath = join(pathSeparator, pathToGeneratedHeaderDirectory, args.wrapperName);
 
         return generatedHeaderPath;
     }
@@ -497,14 +511,21 @@ class ProtoProcessor implements Runnable
         return cppEnum;
     }
 
-    private CppType ueNamedType(final String serviceName, final TypeElement el)
+    private CppType ueNamedType(final String serviceName, final TypeElement el, boolean useServiceScope)
     {
-        if (el instanceof MessageElement)
-            return plain("F" + serviceName + "_" + el.name(), Struct);
-        else if (el instanceof EnumElement)
-            return plain("E" + serviceName + "_" + el.name(), Enum);
-        else
-            throw new RuntimeException("Unknown type: '" + el.getClass().getName() + "'");
+        if(useServiceScope) {
+            if (el instanceof MessageElement)
+                return plain("F" + serviceName + "_" + el.name(), Struct);
+            else if (el instanceof EnumElement)
+                return plain("E" + serviceName + "_" + el.name(), Enum);
+        }
+        else {
+            if (el instanceof MessageElement)
+                return plain("F" +  el.name(), Struct);
+            else if (el instanceof EnumElement)
+                return plain("E" + el.name(), Enum);
+        }
+        throw new RuntimeException("Unknown type: '" + el.getClass().getName() + "'");
     }
 
 
